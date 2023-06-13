@@ -13,7 +13,7 @@ SelectionFunc = Callable[[Population, FitnessFunc], Tuple[Genome, Genome]]
 CrossoverFunct = Callable[[Genome, Genome], Tuple[Genome, Genome]]
 MutationFunct = Callable[[Genome], Genome]
 
-POPULATION_SIZE = 10
+POPULATION_SIZE = 3
 NUM_PLANTS = 3
 PRODUCTION_QTY = 100
 
@@ -53,20 +53,26 @@ def decode(num_plants: int, gen: Genome, prod_qty: int) -> List[int]:
         offset1 = i*len_binary
         offset2 = (i+1)*7
         binary_digits = gen[offset1: offset2]
-        print(binary_digits)
+        # print(binary_digits)
         binary_string = ''.join(str(bit) for bit in binary_digits)
         decimal_value = int(binary_string, 2)
         prod[i] = decimal_value
 
     return prod
 
-genome= generate_genome(NUM_PLANTS, PRODUCTION_QTY)
-print(f'genome: {genome}')
-list_prod = decode(NUM_PLANTS, genome, PRODUCTION_QTY)
-print(list_prod)
+# genome= generate_genome(NUM_PLANTS, PRODUCTION_QTY)
+# print(f'genome: {genome}')
+# list_prod = decode(NUM_PLANTS, genome, PRODUCTION_QTY)
+# print(list_prod)
 
-def generate_population(size: int, genome_length: int) -> Population:
-    return [generate_genome(genome_length) for _ in range(size)]
+def generate_population(size: int, num_plants: int, prod_qty: int) -> Population:
+    return [generate_genome(num_plants, prod_qty) for _ in range(size)]
+
+population_gen = generate_population(POPULATION_SIZE, NUM_PLANTS, PRODUCTION_QTY)
+print(population_gen)
+for i in range(POPULATION_SIZE):
+    dec_res = decode(NUM_PLANTS, population_gen[i], PRODUCTION_QTY)
+    print(f'decode: {dec_res} ; SUM {sum(dec_res)}')
 
 def fitness(genome: Genome, things: [Thing], weight_limit: int) -> int:
     if len(genome) != len(things):
