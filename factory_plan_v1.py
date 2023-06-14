@@ -4,6 +4,8 @@ from random import choice, choices, randint, randrange, random
 from typing import List, Callable, Tuple
 from collections import namedtuple
 import random
+from sklearn.preprocessing import MinMaxScaler
+import numpy as np
 
 Genome = List[int]
 Population = List[Genome]
@@ -15,10 +17,21 @@ MutationFunct = Callable[[Genome], Genome]
 
 POPULATION_SIZE = 3
 NUM_PLANTS = 3
+NUM_FIELDS = 3
 PRODUCTION_QTY = 100
+ADDITIONAL_COST_PER_FIELD = 100
 
-Plant_capacity = [PRODUCTION_QTY for _ in range(NUM_PLANTS)]
-
+Plant_capacity = [int(PRODUCTION_QTY/4) for _ in range(NUM_PLANTS*NUM_FIELDS)]
+plant_cost = [50, 30, 20]
+plant_qty = [0.9, 0.8, 0.5]
+field_cost = [11.7, 48.8, 36.5, 22.1, 10.4, 21.5, 11.5, 10.3, 19.1]
+# field_cost = [((plant_cost[int(i/NUM_FIELDS)])*random.random()) for i in range(NUM_PLANTS*NUM_FIELDS)]
+# data = np.array(field_cost).reshape(-1, 1)
+# scaler = MinMaxScaler()
+# scaled_cost = scaler.fit_transform(data)
+# scaled_cost = scaled_cost.flatten()
+# field_qty = [0.5 + (scaled_cost[i]*random.uniform(0.1, 0.5)) for i in range(NUM_PLANTS*NUM_FIELDS)]
+field_qty = [0.5, 0.9, 0.7, 0.5, 0.5, 0.6, 0.6, 0.5, 0.5]
 def generate_genome(num_plants: int, prod_qty: int) -> Genome:
     binary_representation = bin(prod_qty)[2:]
     len_binary = len(binary_representation)
@@ -68,29 +81,35 @@ def decode(num_plants: int, gen: Genome, prod_qty: int) -> List[int]:
 def generate_population(size: int, num_plants: int, prod_qty: int) -> Population:
     return [generate_genome(num_plants, prod_qty) for _ in range(size)]
 
-population_gen = generate_population(POPULATION_SIZE, NUM_PLANTS, PRODUCTION_QTY)
+population_gen = generate_population(POPULATION_SIZE, NUM_PLANTS*NUM_FIELDS, PRODUCTION_QTY)
 print(population_gen)
 for i in range(POPULATION_SIZE):
-    dec_res = decode(NUM_PLANTS, population_gen[i], PRODUCTION_QTY)
+    dec_res = decode(NUM_PLANTS*NUM_FIELDS, population_gen[i], PRODUCTION_QTY)
     print(f'decode: {dec_res} ; SUM {sum(dec_res)}')
 
-def fitness(genome: Genome, things: [Thing], weight_limit: int) -> int:
-    if len(genome) != len(things):
-        raise ValueError("genome and things must be of the same length")
+def fitness(genome: Genome, cost_f: [float], qty_f: [float], total_field: int, total_qty: int, cost_p: [int]) -> float:
+    list_prod = decode(total_field, genome, total_qty)
+    if sum(list_prod) != total_qty:
+        raise ValueError("production decode must be the same")
 
-    weight = 0
     value = 0
+    cost_field = []
+    for i in range(total_field):
+        temp_cost = cost_f[i] * list_prod[i]
+        temp_qty = qty_f[i]
+        val_random = random.random()
+        print(f" field: {i} | probs: {val_random} | qty: {temp_qty}")
+        if val_random > temp_qty:
+            props = val_random - temp_qty
+            deficit = 1 + (int(list_prod[i]*props))
+            print(f"deficit: {deficit}")
+            temp_cost += (deficit*ADDITIONAL_COST_PER_FIELD)
+        cost_field.append(temp_cost)
 
-    for i, thing in enumerate(things):
-        if genome[i] == 1:
-            weight += thing.weight
-            value += thing.value
-
-            if weight > weight_limit:
-                return 0
-
+    value = sum(cost_field)
     return value
 
+print(f"fitness: {fitness(population_gen[1], field_cost, field_qty, (NUM_PLANTS*NUM_FIELDS), PRODUCTION_QTY, plant_cost)}")
 def selection_pair(population: Population, fitness_func: FitnessFunc) -> Population:
     return choices(
         population=population,
