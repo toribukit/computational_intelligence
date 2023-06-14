@@ -228,6 +228,8 @@ def mutation(genome: Genome, num: int = 1, probability: float= 0.5) -> Genome:
     for _ in range(num):
         index = randrange(len(genome))
         genome[index] = genome[index] if random() > probability else abs(genome[index]-1)
+    genome = perform_correction(genome, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, Plant_capacity)
+
     return genome
 
 def run_evolution(
