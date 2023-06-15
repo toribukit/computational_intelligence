@@ -133,6 +133,22 @@ def fitness(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: in
     # print(f'cost field: {sum(cost_field)}, cost plant: {sum(cost_plant)}')
     value = sum(cost_field) + sum(cost_plant)
     return value
+def fitness_fixed(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: int, num_plant:int, total_qty: int, cost_p: [int]) -> float:
+    total_field = field_per_plant*num_plant
+
+    list_prod = decode(total_field, genome, total_qty)
+    if sum(list_prod) != total_qty:
+        raise ValueError("production decode must be the same")
+
+    value = 0
+    cost_field = []
+    cost_plant = [0 for _ in range(num_plant)]
+    for i in range(total_field):
+        temp_cost = cost_f[i] * list_prod[i]
+        cost_field.append(temp_cost)
+        cost_plant[int(i/field_per_plant)] += list_prod[i]*cost_p[int(i/field_per_plant)]
+    value = sum(cost_field) + sum(cost_plant)
+    return value
 
 # print(f"fitness: {fitness(population_gen[1], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
 def selection_pair(population: Population, fitness_func: FitnessFunc) -> Population:
@@ -305,3 +321,4 @@ print(f"time: {end - start}s")
 dec_res = decode(NUM_PLANTS*NUM_FIELDS, population[0], PRODUCTION_QTY)
 print(f'Best Solutions: {dec_res} ; SUM {sum(dec_res)}')
 print(f"fitness stochastic: {fitness(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
+print(f"fitness fixed: {fitness_fixed(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
