@@ -4,14 +4,13 @@ from random import choice, choices, randint, randrange, random
 from typing import List, Callable, Tuple
 from collections import namedtuple
 import random
-from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 # Set the random seed
 # random.seed(420)
 
 Genome = List[int]
 Population = List[Genome]
-FitnessFunc = Callable[[Genome], float]
+FitnessFunc = Callable[[Genome], int]
 PopulateFunc = Callable[[], Population]
 SelectionFunc = Callable[[Population, FitnessFunc], Tuple[Genome, Genome]]
 CrossoverFunct = Callable[[Genome, Genome], Tuple[Genome, Genome]]
@@ -21,8 +20,10 @@ POPULATION_SIZE = 20
 NUM_PLANTS = 3
 NUM_FIELDS = 3
 PRODUCTION_QTY = 100
-ADDITIONAL_COST_PER_FIELD = 50
+MAX_PROD_QTY = PRODUCTION_QTY
+COST_OF_RISK = 50
 EVAL_ROUND = 10
+ADDITIONAL_COST_PER_FIELD = 50
 
 Plant_capacity = [int(PRODUCTION_QTY/4) for _ in range(NUM_PLANTS*NUM_FIELDS)]
 plant_cost = [50, 30, 20]
@@ -51,27 +52,21 @@ def encode(num_plants: int, num_fields:int, list_prod: [int], prod_qty: int) -> 
     return gen
 
 
-def generate_genome(num_plants: int, prod_qty: int) -> Genome:
-    binary_representation = bin(prod_qty)[2:]
-    len_binary = len(binary_representation)
-
+def generate_genome(num_plants: int, field_per_plant:int, prod_qty: int) -> Genome:
     remaining_qty = prod_qty
-    gen = []
-    for i in range(num_plants):
+    list_prod = []
+    for i in range(num_plants*field_per_plant):
         qty_plant = random.randint(0, remaining_qty)
-        if i == (num_plants - 1):
+        if i == ((num_plants*field_per_plant) - 1):
             qty_plant = remaining_qty
 
         if qty_plant > Plant_capacity[i]:
             qty_plant = Plant_capacity[i]
 
         remaining_qty -= qty_plant
-        binary_string = bin(qty_plant)[2:]
-        if len(binary_string) < len_binary:
-            binary_string = '0' * (len_binary - len(binary_string)) + binary_string
-        binary_digits = [int(bit) for bit in binary_string]
-        gen.extend(binary_digits)
-
+        list_prod.append(qty_plant)
+    # print(list_prod)
+    gen = encode(num_plants, field_per_plant, list_prod, prod_qty)
     return gen
 
 # print(f'genome: {generate_genome(NUM_PLANTS, PRODUCTION_QTY)}')
@@ -97,20 +92,21 @@ def decode(num_plants: int, gen: Genome, prod_qty: int) -> List[int]:
 # list_prod = decode(NUM_PLANTS, genome, PRODUCTION_QTY)
 # print(list_prod)
 
-def generate_population(size: int, num_plants: int, prod_qty: int) -> Population:
-    return [generate_genome(num_plants, prod_qty) for _ in range(size)]
+def generate_population(size: int, num_plants: int, field_per_plant:int, prod_qty: int) -> Population:
+    return [generate_genome(num_plants,field_per_plant, prod_qty) for _ in range(size)]
 
-population_gen = generate_population(POPULATION_SIZE, NUM_PLANTS*NUM_FIELDS, PRODUCTION_QTY)
+population_gen = generate_population(POPULATION_SIZE, NUM_PLANTS, NUM_FIELDS, PRODUCTION_QTY)
 
-# print(population_gen)
-# for i in range(POPULATION_SIZE):
-#     dec_res = decode(NUM_PLANTS*NUM_FIELDS, population_gen[i], PRODUCTION_QTY)
-#     print(f'decode: {dec_res} ; SUM {sum(dec_res)}')
+print(population_gen)
+for i in range(POPULATION_SIZE):
+    dec_res = decode(NUM_PLANTS*NUM_FIELDS, population_gen[i], PRODUCTION_QTY)
+    print(f'decode: {dec_res} ; SUM {sum(dec_res)}')
 
 def fitness(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: int, num_plant:int, total_qty: int, cost_p: [int], qty_p: [float] = plant_qty) -> float:
     total_field = field_per_plant*num_plant
 
     list_prod = decode(total_field, genome, total_qty)
+
     if sum(list_prod) != total_qty:
         raise ValueError("production decode must be the same")
 
@@ -118,38 +114,26 @@ def fitness(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: in
     cost_field = []
     cost_plant = [0 for _ in range(num_plant)]
     for i in range(total_field):
+        # print(f'field: {i}')
         temp_cost = cost_f[i] * list_prod[i]
         temp_qty = qty_f[i]
-        val_random = random.random()
-        # print(f" field: {i} | probs: {val_random} | qty: {temp_qty}")
-        if val_random > temp_qty:
-            props = val_random - temp_qty
-            deficit = 1 + (int(list_prod[i]*props))
-            # print(f"deficit: {deficit}")
-            temp_cost += (deficit*ADDITIONAL_COST_PER_FIELD)
+        risk_cost = ((1.0 - temp_qty) * COST_OF_RISK) * list_prod[i]
+        temp_cost += risk_cost
+
         cost_field.append(temp_cost)
 
-        cost_plant[int(i/field_per_plant)] += list_prod[i]*cost_p[int(i/field_per_plant)]
-        cost_plant[int(i / field_per_plant)] += (list_prod[i] * (1.0 - qty_p[int(i / field_per_plant)]))*cost_p[int(i/field_per_plant)]
 
-    # print(f'cost field: {sum(cost_field)}, cost plant: {sum(cost_plant)}')
+        cost_plant[int(i/field_per_plant)] += list_prod[i]*cost_p[int(i/field_per_plant)]
+        cost_plant[int(i / field_per_plant)] += (list_prod[i] * (1.0 - qty_p[int(i / field_per_plant)])) * cost_p[int(i / field_per_plant)]
+
     value = sum(cost_field) + sum(cost_plant)
     return value
-
-def fitness_avg(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: int, num_plant:int, total_qty: int, cost_p: [int], eval_round: int = EVAL_ROUND) -> float:
-    value_hist = []
-    for _ in range(eval_round):
-        val = fitness(genome, cost_f, qty_f, field_per_plant, num_plant, total_qty, cost_p)
-        value_hist.append(val)
-
-    return (sum(value_hist) / len(value_hist))
-
-def fitness_fixed(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: int, num_plant:int, total_qty: int, cost_p: [int], qty_p: [float] = plant_qty) -> float:
+def fitness_fixed(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: int, num_plant:int, total_qty: int, cost_p: [int]) -> float:
     total_field = field_per_plant*num_plant
 
     list_prod = decode(total_field, genome, total_qty)
-    if sum(list_prod) != total_qty:
-        raise ValueError("production decode must be the same")
+    if sum(list_prod) < total_qty:
+        raise ValueError(f"production decode must equal or greater than total quantity. list prod: {list_prod} and total qty: {total_qty}")
 
     value = 0
     cost_field = []
@@ -158,9 +142,55 @@ def fitness_fixed(genome: Genome, cost_f: [float], qty_f: [float], field_per_pla
         temp_cost = cost_f[i] * list_prod[i]
         cost_field.append(temp_cost)
         cost_plant[int(i/field_per_plant)] += list_prod[i]*cost_p[int(i/field_per_plant)]
-        # cost_plant[int(i / field_per_plant)] += (list_prod[i] * (1.0 - qty_p[int(i / field_per_plant)]))*cost_p[int(i/field_per_plant)]
     value = sum(cost_field) + sum(cost_plant)
     return value
+
+# print(f"fitness: {fitness(population_gen[1], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
+
+def fitness_stoc(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: int, num_plant:int, total_qty: int, cost_p: [int], qty_p: [float] = plant_qty) -> float:
+    total_field = field_per_plant*num_plant
+
+    list_prod = decode(total_field, genome, total_qty)
+
+    if sum(list_prod) < total_qty:
+        raise ValueError(f"production decode must equal or greater than total quantity. list prod: {list_prod} and total qty: {total_qty}")
+
+    value = 0
+    deficit = 0
+    cost_field = []
+    cost_plant = [0 for _ in range(num_plant)]
+    for i in range(total_field):
+        # print(f'field: {i}')
+        temp_cost = cost_f[i] * list_prod[i]
+        temp_qty = qty_f[i]
+        # print(f"quality: {temp_qty}")
+        val_random = random.random()
+        if val_random > temp_qty:
+            props = val_random - temp_qty
+            failed = 1 + (int(list_prod[i]*props))
+            deficit += failed
+            # print(f"deficit: {failed} | deficit: {deficit}")
+            # temp_cost += (deficit*ADDITIONAL_COST_PER_FIELD)
+        cost_field.append(temp_cost)
+
+        cost_plant[int(i/field_per_plant)] += list_prod[i]*cost_p[int(i/field_per_plant)]
+        cost_plant[int(i/field_per_plant)] += (list_prod[i] * (1.0 - qty_p[int(i/field_per_plant)])) * cost_p[int(i/field_per_plant)]
+
+    # print(f'prod real: {(sum(list_prod) - deficit)}')
+    if (sum(list_prod) - deficit) < total_qty:
+        additional_cost = (total_qty - (sum(list_prod) - deficit)) * ADDITIONAL_COST_PER_FIELD
+    else:
+        additional_cost = 0
+    # print(f'cost field: {sum(cost_field)}, cost plant: {sum(cost_plant)}, additional cost: {additional_cost}')
+    value = sum(cost_field) + sum(cost_plant) + additional_cost
+    return value
+def fitness_avg(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: int, num_plant:int, total_qty: int, cost_p: [int], eval_round: int = EVAL_ROUND) -> float:
+    value_hist = []
+    for _ in range(eval_round):
+        val = fitness_stoc(genome, cost_f, qty_f, field_per_plant, num_plant, total_qty, cost_p)
+        value_hist.append(val)
+
+    return (sum(value_hist) / len(value_hist))
 def selection_pair(population: Population, fitness_func: FitnessFunc) -> Population:
     fitness_val = [fitness_func(genome) for genome in population]
     min_fitness = min(fitness_val)
@@ -207,7 +237,7 @@ def uniform_crossover(a: Genome, b: Genome) -> Tuple[Genome, Genome]:
 
     return offspring1, offspring2
 
-def perform_correction(offspring:Genome, field_per_plant: int, num_plant:int, total_qty: int, capacity: [int]) -> Genome:
+def perform_correction(offspring:Genome, field_per_plant: int, num_plant:int, total_qty: int, capacity: [int], max_qty: int = MAX_PROD_QTY) -> Genome:
     total_field = field_per_plant * num_plant
     list_prod = decode(total_field, offspring, total_qty)
 
@@ -215,22 +245,21 @@ def perform_correction(offspring:Genome, field_per_plant: int, num_plant:int, to
         if list_prod[i] > capacity[i]:
             list_prod[i] = capacity[i]
 
-    diff = total_qty - (sum(list_prod))
-    # print(f'before correction: {list_prod}')
+    if sum(list_prod) > max_qty or sum(list_prod) < total_qty:
+        diff = total_qty - (sum(list_prod))
 
-    while diff != 0:
-        field_index = random.randint(0, len(list_prod) - 1)
+        while diff != 0:
+            field_index = random.randint(0, len(list_prod) - 1)
 
-        if diff > 0:
-            increment = min(diff, (capacity[field_index] - list_prod[field_index]))
-            list_prod[field_index] += increment
-            diff -= increment
-        else:
-            decrement = min(-diff, list_prod[field_index])
-            list_prod[field_index] -= decrement
-            diff += decrement
+            if diff > 0:
+                increment = min(diff, (capacity[field_index] - list_prod[field_index]))
+                list_prod[field_index] += increment
+                diff -= increment
+            else:
+                decrement = min(-diff, list_prod[field_index])
+                list_prod[field_index] -= decrement
+                diff += decrement
 
-    # print(f'after correction: {list_prod}')
     offspring = encode(num_plant,field_per_plant, list_prod,total_qty)
 
     return offspring
@@ -266,7 +295,6 @@ def mutation(genome: Genome, num: int = 1, probability: float= 0.5) -> Genome:
         # print(genome[index])
         genome[index] = genome[index] if random.random() > probability else abs(genome[index]-1)
     genome = perform_correction(genome, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, Plant_capacity)
-
     return genome
 
 
@@ -287,22 +315,11 @@ def run_evolution(
 ) -> Tuple[Population, int]:
     population = populate_func()
 
-    counter_same_fitness = 0
-    old_fitness = 0
     for i in range(generation_limit):
         population = sorted(population, key=lambda genome: fitness_func(genome), reverse=False)
         print(f"generations: {i}")
-        new_fitness = fitness_func(population[0])
-        print(f"fitness: {new_fitness}")
-
-        if (new_fitness == old_fitness):
-            counter_same_fitness += 1
-        else:
-            counter_same_fitness = 0
-            old_fitness = new_fitness
-
-        # if(counter_same_fitness == 10):
-        #     break
+        dec_res = decode(NUM_PLANTS * NUM_FIELDS, population[0], PRODUCTION_QTY)
+        print(f"fitness: {fitness(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)} ; SUM {sum(dec_res)}")
 
         next_generation = population[0:2]
 
@@ -321,7 +338,8 @@ def run_evolution(
         reverse=False
     )
     print(f"generations: {i}")
-    print(f"fitness: {fitness_func(population[0])}")
+    dec_res = decode(NUM_PLANTS * NUM_FIELDS, population[0], PRODUCTION_QTY)
+    print(f"fitness: {fitness(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}; SUM {sum(dec_res)}")
 
 
     return population, i
@@ -329,10 +347,10 @@ def run_evolution(
 start = time.time()
 population, generation = run_evolution(
     populate_func=partial(
-        generate_population, size=POPULATION_SIZE, num_plants=NUM_PLANTS*NUM_FIELDS, prod_qty=PRODUCTION_QTY
+        generate_population, size=POPULATION_SIZE, num_plants=NUM_PLANTS, field_per_plant=NUM_FIELDS, prod_qty=PRODUCTION_QTY
     ),
     fitness_func=partial(
-        fitness_fixed, cost_f=field_cost, qty_f=field_qty, field_per_plant=NUM_FIELDS, num_plant=NUM_PLANTS, total_qty=PRODUCTION_QTY, cost_p=plant_cost
+        fitness, cost_f=field_cost, qty_f=field_qty, field_per_plant=NUM_FIELDS, num_plant=NUM_PLANTS, total_qty=PRODUCTION_QTY, cost_p=plant_cost
     ),
     generation_limit=100
 )
@@ -342,6 +360,6 @@ print(f"number of generations : {generation}")
 print(f"time: {end - start}s")
 dec_res = decode(NUM_PLANTS*NUM_FIELDS, population[0], PRODUCTION_QTY)
 print(f'Best Solutions: {dec_res} ; SUM {sum(dec_res)}')
-print(f"fitness stochastic: {fitness(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
-print(f"fitness avg: {fitness_avg(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
+print(f"fitness: {fitness(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
+print(f"fitness stochastic: {fitness_avg(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
 print(f"fitness fixed: {fitness_fixed(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")

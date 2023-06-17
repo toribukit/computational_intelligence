@@ -16,7 +16,7 @@ SelectionFunc = Callable[[Population, FitnessFunc], Tuple[Genome, Genome]]
 CrossoverFunct = Callable[[Genome, Genome], Tuple[Genome, Genome]]
 MutationFunct = Callable[[Genome], Genome]
 
-POPULATION_SIZE = 10
+POPULATION_SIZE = 20
 NUM_PLANTS = 3
 NUM_FIELDS = 3
 PRODUCTION_QTY = 100
@@ -101,7 +101,7 @@ for i in range(POPULATION_SIZE):
     dec_res = decode(NUM_PLANTS*NUM_FIELDS, population_gen[i], PRODUCTION_QTY)
     print(f'decode: {dec_res} ; SUM {sum(dec_res)}')
 
-def fitness(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: int, num_plant:int, total_qty: int, cost_p: [int]) -> float:
+def fitness(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: int, num_plant:int, total_qty: int, cost_p: [int], qty_p: [float] = plant_qty) -> float:
     total_field = field_per_plant*num_plant
 
     list_prod = decode(total_field, genome, total_qty)
@@ -127,8 +127,8 @@ def fitness(genome: Genome, cost_f: [float], qty_f: [float], field_per_plant: in
             # temp_cost += (deficit*ADDITIONAL_COST_PER_FIELD)
         cost_field.append(temp_cost)
 
-
         cost_plant[int(i/field_per_plant)] += list_prod[i]*cost_p[int(i/field_per_plant)]
+        cost_plant[int(i/field_per_plant)] += (list_prod[i] * (1.0 - qty_p[int(i/field_per_plant)])) * cost_p[int(i/field_per_plant)]
 
     # print(f'prod real: {(sum(list_prod) - deficit)}')
     if (sum(list_prod) - deficit) < total_qty:
