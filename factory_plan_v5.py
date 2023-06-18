@@ -16,27 +16,86 @@ SelectionFunc = Callable[[Population, FitnessFunc], Tuple[Genome, Genome]]
 CrossoverFunct = Callable[[Genome, Genome], Tuple[Genome, Genome]]
 MutationFunct = Callable[[Genome], Genome]
 
-POPULATION_SIZE = 20
-NUM_PLANTS = 3
+POPULATION_SIZE = 30
+NUM_PLANTS = 9
 NUM_FIELDS = 3
 PRODUCTION_QTY = 100
-MAX_PROD_QTY = PRODUCTION_QTY
-COST_OF_RISK = 50
-EVAL_ROUND = 10
 ADDITIONAL_COST_PER_FIELD = 50
+EVAL_ROUND = 10
 
-Plant_capacity = [int(PRODUCTION_QTY/4) for _ in range(NUM_PLANTS*NUM_FIELDS)]
-plant_cost = [50, 30, 20]
-plant_qty = [0.9, 0.8, 0.5]
-# field_cost = [11.7, 48.8, 36.5, 22.1, 10.4, 21.5, 11.5, 10.3, 19.1]
-field_cost = [61.7, 48.8, 36.5, 22.1, 10.4, 21.5, 11.5, 10.3, 19.1]
-# field_cost = [((plant_cost[int(i/NUM_FIELDS)])*random.random()) for i in range(NUM_PLANTS*NUM_FIELDS)]
-# data = np.array(field_cost).reshape(-1, 1)
-# scaler = MinMaxScaler()
-# scaled_cost = scaler.fit_transform(data)
-# scaled_cost = scaled_cost.flatten()
-# field_qty = [0.5 + (scaled_cost[i]*random.uniform(0.1, 0.5)) for i in range(NUM_PLANTS*NUM_FIELDS)]
-field_qty = [0.5, 0.9, 0.7, 0.5, 0.5, 0.6, 0.6, 0.5, 0.5]
+Plant_capacity = [int(PRODUCTION_QTY/8) for _ in range(NUM_PLANTS*NUM_FIELDS)]
+MAX_PROD_QTY = PRODUCTION_QTY
+
+plant_cost = []
+with open(".\data\plant_cost.txt", "r") as file:
+    for line in file:
+        item = line.strip()  # Remove leading/trailing whitespace
+
+        # Convert the item to integer if possible, otherwise convert to float
+        try:
+            item = int(item)
+        except ValueError:
+            try:
+                item = float(item)
+            except ValueError:
+                pass
+
+        plant_cost.append(item)
+
+plant_qty = []
+with open(".\data\plant_qty.txt", "r") as file:
+    for line in file:
+        item = line.strip()  # Remove leading/trailing whitespace
+
+        # Convert the item to integer if possible, otherwise convert to float
+        try:
+            item = int(item)
+        except ValueError:
+            try:
+                item = float(item)
+            except ValueError:
+                pass
+
+        plant_qty.append(item)
+
+field_cost = []
+with open(".\data\\field_cost.txt", "r") as file:
+    for line in file:
+        item = line.strip()  # Remove leading/trailing whitespace
+
+        # Convert the item to integer if possible, otherwise convert to float
+        try:
+            item = int(item)
+        except ValueError:
+            try:
+                item = float(item)
+            except ValueError:
+                pass
+
+        field_cost.append(item)
+
+field_qty = []
+with open(".\data\\field_qty.txt", "r") as file:
+    for line in file:
+        item = line.strip()  # Remove leading/trailing whitespace
+
+        # Convert the item to integer if possible, otherwise convert to float
+        try:
+            item = int(item)
+        except ValueError:
+            try:
+                item = float(item)
+            except ValueError:
+                pass
+
+        field_qty.append(item)
+
+print(f'plant cost: {plant_cost}, len: {len(plant_cost)}')
+print(f'plant quality: {plant_qty}, len: {len(plant_qty)}')
+print(f'field cost: {field_cost}, len: {len(field_cost)}')
+print(f'field quality: {field_qty}, len: {len(field_qty)}')
+
+COST_OF_RISK = max(field_cost) * 1.5
 
 def encode(num_plants: int, num_fields:int, list_prod: [int], prod_qty: int) -> Genome:
     binary_representation = bin(prod_qty)[2:]
@@ -288,7 +347,7 @@ def perform_correction(offspring:Genome, field_per_plant: int, num_plant:int, to
 
 
 
-def mutation(genome: Genome, num: int = 1, probability: float= 0.5) -> Genome:
+def mutation(genome: Genome, num: int = 2, probability: float= 0.5) -> Genome:
     for _ in range(num):
         index = randrange(len(genome))
         # print(genome)
@@ -321,9 +380,9 @@ def run_evolution(
         dec_res = decode(NUM_PLANTS * NUM_FIELDS, population[0], PRODUCTION_QTY)
         print(f"fitness: {fitness(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)} ; SUM {sum(dec_res)}")
 
-        next_generation = population[0:2]
+        next_generation = population[0:8]
 
-        for j in range(int(len(population) / 2) -1):
+        for j in range(int(len(population) / 2) -4):
             parents = selection_func(population, fitness_func)
             offspring_a, offspring_b = crossover_funct(parents[0], parents[1])
             offspring_a = mutation_func(offspring_a)
@@ -352,7 +411,7 @@ population, generation = run_evolution(
     fitness_func=partial(
         fitness, cost_f=field_cost, qty_f=field_qty, field_per_plant=NUM_FIELDS, num_plant=NUM_PLANTS, total_qty=PRODUCTION_QTY, cost_p=plant_cost
     ),
-    generation_limit=100
+    generation_limit=200
 )
 end = time.time()
 
@@ -361,5 +420,5 @@ print(f"time: {end - start}s")
 dec_res = decode(NUM_PLANTS*NUM_FIELDS, population[0], PRODUCTION_QTY)
 print(f'Best Solutions: {dec_res} ; SUM {sum(dec_res)}')
 print(f"fitness: {fitness(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
-print(f"fitness stochastic: {fitness_avg(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
+print(f"fitness avg: {fitness_avg(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
 print(f"fitness fixed: {fitness_fixed(population[0], field_cost, field_qty, NUM_FIELDS, NUM_PLANTS, PRODUCTION_QTY, plant_cost)}")
